@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Globe, Power, Send, UserCircle } from 'lucide-react'
+import { Plus, Trash2, Power, Send, UserCircle, Settings, RefreshCw, CheckCircle, AlertTriangle, XCircle, Loader } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
@@ -101,10 +102,37 @@ function TestPostModal({ account, onClose }) {
   )
 }
 
+function StatusBadge({ status }) {
+  if (!status) return null
+  if (status === 'checking') return (
+    <span className="badge badge-yellow flex items-center gap-1">
+      <Loader size={10} className="animate-spin" /> 確認中
+    </span>
+  )
+  if (status === 'ok') return (
+    <span className="badge badge-green flex items-center gap-1">
+      <CheckCircle size={10} /> 正常
+    </span>
+  )
+  if (status === 'suspended') return (
+    <span className="badge badge-red flex items-center gap-1">
+      <XCircle size={10} /> 凍結
+    </span>
+  )
+  return (
+    <span className="badge badge-red flex items-center gap-1">
+      <AlertTriangle size={10} /> エラー
+    </span>
+  )
+}
+
 export default function AccountsPage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [showAdd, setShowAdd] = useState(false)
   const [testAccount, setTestAccount] = useState(null)
+  const [statuses, setStatuses] = useState({})
+  const [checkingAll, setCheckingAll] = useState(false)
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -137,6 +165,28 @@ export default function AccountsPage() {
     }
   })
 
+  const checkStatus = async (acc) => {
+    setStatuses(p => ({ ...p, [acc.id]: 'checking' }))
+    try {
+      await api.get(`/accounts/${acc.id}/status`)
+      setStatuses(p => ({ ...p, [acc.id]: 'ok' }))
+    } catch (err) {
+      const msg = JSON.stringify(err || '')
+      if (msg.includes('suspend') || msg.includes('block') || msg.includes('凍結')) {
+        setStatuses(p => ({ ...p, [acc.id]: 'suspended' }))
+      } else {
+        setStatuses(p => ({ ...p, [acc.id]: 'error' }))
+      }
+    }
+  }
+
+  const checkAllStatuses = async () => {
+    setCheckingAll(true)
+    await Promise.allSettled(accounts.map(acc => checkStatus(acc)))
+    setCheckingAll(false)
+    toast.success('全アカウントの状態確認が完了しました')
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -144,9 +194,17 @@ export default function AccountsPage() {
           <h1 className="text-xl font-bold text-gray-100">アカウント管理</h1>
           <p className="text-sm text-gray-500 mt-0.5">{accounts.length} 件のアカウント</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
-          <Plus size={15} /> アカウント追加
-        </button>
+        <div className="flex gap-2">
+          {accounts.length > 0 && (
+            <button onClick={checkAllStatuses} disabled={checkingAll} className="btn-secondary">
+              <RefreshCw size={14} className={checkingAll ? 'animate-spin' : ''} />
+              一斉状態確認
+            </button>
+          )}
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus size={15} /> アカウント追加
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -162,62 +220,68 @@ export default function AccountsPage() {
       ) : (
         <div className="grid gap-3">
           {accounts.map(acc => (
-            <div key={acc.id} className="card p-4 flex items-center gap-4">
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden flex items-center justify-center flex-shrink-0">
-                {acc.avatar
-                  ? <img src={acc.avatar} alt="" className="w-full h-full object-cover" />
-                  : <span className="text-sm font-bold text-brand-400">{acc.displayName?.[0]?.toUpperCase()}</span>
-                }
-              </div>
+            <div key={acc.id} className="card p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {acc.avatar
+                    ? <img src={acc.avatar} alt="" className="w-full h-full object-cover" />
+                    : <span className="text-sm font-bold text-brand-400">{acc.displayName?.[0]?.toUpperCase()}</span>
+                  }
+                </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-200">{acc.displayName}</p>
-                <p className="text-sm text-gray-500">@{acc.username}</p>
-              </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-gray-200">{acc.displayName}</p>
+                    <span className={acc.isActive ? 'badge-green' : 'badge-gray'}>
+                      {acc.isActive ? 'アクティブ' : '停止中'}
+                    </span>
+                    <StatusBadge status={statuses[acc.id]} />
+                  </div>
+                  <p className="text-sm text-gray-500">@{acc.username}</p>
+                </div>
 
-              {/* Status */}
-              <span className={acc.isActive ? 'badge-green' : 'badge-gray'}>
-                {acc.isActive ? 'アクティブ' : '停止中'}
-              </span>
-
-              {/* Proxy select */}
-              <select
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 w-36"
-                value={acc.proxyId || ''}
-                onChange={e => proxyMutation.mutate({ id: acc.id, proxyId: e.target.value || null })}
-              >
-                <option value="">プロキシなし</option>
-                {proxies.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setTestAccount(acc)}
-                  className="btn-ghost p-2"
-                  title="テスト投稿"
+                <select
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 w-36"
+                  value={acc.proxyId || ''}
+                  onChange={e => proxyMutation.mutate({ id: acc.id, proxyId: e.target.value || null })}
                 >
-                  <Send size={14} />
-                </button>
-                <button
-                  onClick={() => toggleMutation.mutate(acc.id)}
-                  className={`btn-ghost p-2 ${acc.isActive ? 'text-green-400' : 'text-gray-500'}`}
-                  title={acc.isActive ? '停止する' : '有効にする'}
-                >
-                  <Power size={14} />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm('このアカウントを削除しますか？')) deleteMutation.mutate(acc.id)
-                  }}
-                  className="btn-ghost p-2 text-red-500 hover:text-red-400"
-                >
-                  <Trash2 size={14} />
-                </button>
+                  <option value="">プロキシなし</option>
+                  {proxies.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => navigate(`/accounts/${acc.id}/settings`)}
+                    className="btn-primary px-3 py-1.5 text-xs"
+                  >
+                    <Settings size={13} /> 投稿設定
+                  </button>
+                  <button
+                    onClick={() => checkStatus(acc)}
+                    disabled={statuses[acc.id] === 'checking'}
+                    className="btn-ghost p-2"
+                    title="状態確認"
+                  >
+                    <RefreshCw size={13} className={statuses[acc.id] === 'checking' ? 'animate-spin' : ''} />
+                  </button>
+                  <button onClick={() => setTestAccount(acc)} className="btn-ghost p-2" title="テスト投稿">
+                    <Send size={13} />
+                  </button>
+                  <button
+                    onClick={() => toggleMutation.mutate(acc.id)}
+                    className={`btn-ghost p-2 ${acc.isActive ? 'text-green-400' : 'text-gray-500'}`}
+                  >
+                    <Power size={13} />
+                  </button>
+                  <button
+                    onClick={() => { if (confirm('このアカウントを削除しますか？')) deleteMutation.mutate(acc.id) }}
+                    className="btn-ghost p-2 text-red-500 hover:text-red-400"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

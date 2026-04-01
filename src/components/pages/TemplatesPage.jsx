@@ -1,11 +1,204 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
 
 const FOLDER_COLORS = ['#6272f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899']
+
+// ── CSVインポートモーダル ──────────────────────────────────────
+function CsvImportModal({ folders, onClose }) {
+  const qc = useQueryClient()
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState([]) // [{ title, content }]
+  const [folderId, setFolderId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // CSVの1行をカラム配列にパース（クォート・改行対応）
+  const parseCSVLine = (line) => {
+    const cols = []
+    let cur = ''
+    let inQuote = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++ } // エスケープ ""
+        else { inQuote = !inQuote }
+      } else if (ch === ',' && !inQuote) {
+        cols.push(cur.replace(/\\n/g, '\n')); cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    cols.push(cur.replace(/\\n/g, '\n'))
+    return cols
+  }
+
+  const parseCSV = (text) => {
+    // クォート内の改行を保持しつつ行分割
+    const rows = []
+    let cur = ''
+    let inQuote = false
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '"') {
+        if (inQuote && text[i + 1] === '"') { cur += '""'; i++ }
+        else { inQuote = !inQuote; cur += ch }
+      } else if ((ch === '\n' || ch === '\r') && !inQuote) {
+        if (ch === '\r' && text[i + 1] === '\n') i++
+        if (cur.trim()) rows.push(cur)
+        cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    if (cur.trim()) rows.push(cur)
+
+    if (rows.length < 2) { setError('データが少なすぎます（ヘッダー行＋1行以上必要）'); return }
+
+    const header = parseCSVLine(rows[0]).map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
+    const titleIdx = header.findIndex(h => ['テンプレート名','title','タイトル'].includes(h))
+    const contentIdx = header.findIndex(h => ['本文','content','内容'].includes(h))
+    const tree2Idx = header.findIndex(h => ['ツリー2','tree2'].includes(h))
+    const tree3Idx = header.findIndex(h => ['ツリー3','tree3'].includes(h))
+    const tree4Idx = header.findIndex(h => ['ツリー4','tree4'].includes(h))
+    const tree5Idx = header.findIndex(h => ['ツリー5','tree5'].includes(h))
+
+    if (titleIdx === -1 || contentIdx === -1) {
+      setError('ヘッダー行に「テンプレート名」と「本文」が必要です')
+      return
+    }
+
+    const parsed = []
+    for (let i = 1; i < rows.length; i++) {
+      const cols = parseCSVLine(rows[i])
+      const title = (cols[titleIdx] || '').trim()
+      const content = (cols[contentIdx] || '').trim()
+      if (!content) continue
+      parsed.push({
+        title: title || '無題',
+        content,
+        tree2: tree2Idx >= 0 ? (cols[tree2Idx] || '').trim() : '',
+        tree3: tree3Idx >= 0 ? (cols[tree3Idx] || '').trim() : '',
+        tree4: tree4Idx >= 0 ? (cols[tree4Idx] || '').trim() : '',
+        tree5: tree5Idx >= 0 ? (cols[tree5Idx] || '').trim() : '',
+      })
+    }
+
+    if (parsed.length === 0) { setError('有効なデータが見つかりませんでした'); return }
+    setError('')
+    setPreview(parsed)
+  }
+
+  const handleFile = (e) => {
+    const f = e.target.files[0]
+    if (!f) return
+    setFile(f)
+    setPreview([])
+    setError('')
+    const reader = new FileReader()
+    reader.onload = (ev) => parseCSV(ev.target.result)
+    reader.readAsText(f, 'UTF-8')
+  }
+
+  const handleImport = async () => {
+    if (!preview.length) return
+    setLoading(true)
+    try {
+      const res = await api.post('/templates/bulk-import', {
+        templates: preview,
+        folderId: folderId || null
+      })
+      toast.success(`${res.count}件のテンプレートをインポートしました`)
+      qc.invalidateQueries(['templates'])
+      qc.invalidateQueries(['folders'])
+      onClose()
+    } catch (err) {
+      toast.error(err.error || 'インポートに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="CSVからテンプレートを一括登録" onClose={onClose} wide>
+      <div className="space-y-4">
+        {/* スプレッドシートの説明 */}
+        <div className="bg-blue-900/20 border border-blue-800/30 rounded-xl px-4 py-3 space-y-1.5">
+          <p className="text-xs font-semibold text-blue-400">Googleスプレッドシートの準備</p>
+          <p className="text-xs text-blue-300/80">1行目（ヘッダー）に以下の列名を入力してください：</p>
+          <div className="font-mono text-xs bg-blue-900/30 rounded-lg px-3 py-2 text-blue-200 space-y-0.5">
+            <p>テンプレート名 , 本文 , ツリー2 , ツリー3 , ツリー4 , ツリー5</p>
+          </div>
+          <p className="text-xs text-blue-300/80">ツリー2〜5は任意。空欄なら通常投稿として登録されます。</p>
+          <p className="text-xs text-blue-300/80">セル内改行もそのまま反映されます。</p>
+          <p className="text-xs text-blue-300/80">入力後 → 「ファイル」→「ダウンロード」→「CSV」</p>
+        </div>
+
+        {/* ファイル選択 */}
+        <div>
+          <label className="label">CSVファイルを選択</label>
+          <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-gray-700 rounded-xl cursor-pointer hover:border-brand-500 hover:bg-brand-600/5 transition-all">
+            <Upload size={18} className="text-gray-500" />
+            <span className="text-sm text-gray-500">{file ? file.name : 'クリックまたはドラッグ＆ドロップ'}</span>
+            <input type="file" accept=".csv" className="hidden" onChange={handleFile} />
+          </label>
+        </div>
+
+        {/* エラー */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-800/30 rounded-xl px-4 py-3">
+            <p className="text-xs text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* プレビュー */}
+        {preview.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="label mb-0">プレビュー（{preview.length}件）</label>
+              <div>
+                <label className="label mb-0 inline mr-2">インポート先フォルダ</label>
+                <select className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 outline-none"
+                  value={folderId} onChange={e => setFolderId(e.target.value)}>
+                  <option value="">未分類</option>
+                  {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1.5">
+              {preview.map((t, i) => {
+                const treeCount = [t.content, t.tree2, t.tree3, t.tree4, t.tree5].filter(Boolean).length
+                return (
+                  <div key={i} className="bg-gray-800 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-medium text-gray-200">{t.title}</p>
+                      {treeCount > 1 && (
+                        <span className="badge-blue text-xs">ツリー {treeCount}件</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 line-clamp-2">{t.content}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* アクション */}
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+          <button onClick={onClose} className="btn-secondary">キャンセル</button>
+          <button onClick={handleImport} disabled={loading || !preview.length} className="btn-primary">
+            <Upload size={14} />
+            {loading ? 'インポート中...' : `${preview.length}件をインポート`}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 // ── フォルダ作成・編集モーダル ──────────────────────────────────
 function FolderModal({ folder, onClose }) {
@@ -280,6 +473,7 @@ export default function TemplatesPage() {
   const qc = useQueryClient()
   const [selectedFolder, setSelectedFolder] = useState(null)
   const [search, setSearch] = useState('')
+  const [showCsvImport, setShowCsvImport] = useState(false)
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [editFolder, setEditFolder] = useState(null)
   const [addToFolder, setAddToFolder] = useState(null) // フォルダへ追加モーダル用
@@ -312,6 +506,7 @@ export default function TemplatesPage() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-bold text-gray-100">テンプレート管理</h1><p className="text-sm text-gray-500 mt-0.5">{templates.length} 件</p></div>
         <div className="flex gap-2">
+          <button onClick={() => setShowCsvImport(true)} className="btn-secondary"><Upload size={15} /> CSVインポート</button>
           <button onClick={() => setShowFolderModal(true)} className="btn-secondary"><FolderPlus size={15} /> フォルダ作成</button>
           <button onClick={() => setShowTemplateModal(true)} className="btn-primary"><Plus size={15} /> テンプレート作成</button>
         </div>
@@ -411,6 +606,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* モーダル類 */}
+      {showCsvImport && <CsvImportModal folders={folders} onClose={() => setShowCsvImport(false)} />}
       {(showFolderModal || editFolder) && <FolderModal folder={editFolder} onClose={() => { setShowFolderModal(false); setEditFolder(null) }} />}
       {addToFolder && <AddToFolderModal folder={addToFolder} onClose={() => setAddToFolder(null)} />}
       {(showTemplateModal || editTemplate) && (

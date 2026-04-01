@@ -445,6 +445,8 @@ function TestPostModal({ account, onClose }) {
       </form>
     </Modal>
   )
+}
+
 function StatusBadge({ status }) {
   if (!status) return null
   if (status === 'checking') return <span className="badge badge-yellow flex items-center gap-1"><Loader size={10} className="animate-spin" /> 確認中</span>

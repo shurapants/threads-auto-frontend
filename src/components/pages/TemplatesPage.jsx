@@ -215,7 +215,7 @@ function TemplateModal({ template, folderId, folders, onClose }) {
   }
 
   return (
-    <Modal title={isEdit ? 'テンプレート編集' : '新規テンプレート'} onClose={onClose} wide>
+    <Modal title={isEdit ? 'テンプレート編集' : '新規テンプレート'} onClose={onClose} full>
       <form onSubmit={submit} className="space-y-4">
         <div>
           <label className="label">タイトル</label>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
@@ -475,6 +475,8 @@ export default function TemplatesPage() {
   const [search, setSearch] = useState('')
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [showFolderModal, setShowFolderModal] = useState(false)
+  const [sortKey, setSortKey] = useState('updatedAt') // 'updatedAt' | 'createdAt' | 'title'
+  const [sortDir, setSortDir] = useState('desc') // 'asc' | 'desc'
   const [editFolder, setEditFolder] = useState(null)
   const [addToFolder, setAddToFolder] = useState(null) // フォルダへ追加モーダル用
   const [showTemplateModal, setShowTemplateModal] = useState(false)
@@ -487,7 +489,21 @@ export default function TemplatesPage() {
     queryFn: () => { const p = new URLSearchParams(); if (selectedFolder) p.set('folderId', selectedFolder); if (search) p.set('search', search); return api.get(`/templates?${p}`) }
   })
 
-  const deleteTemplate = useMutation({ mutationFn: (id) => api.delete(`/templates/${id}`), onSuccess: () => { toast.success('削除しました'); qc.invalidateQueries(['templates']) } })
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const sortedTemplates = [...templates].sort((a, b) => {
+    let va, vb
+    if (sortKey === 'title') { va = a.title?.toLowerCase() || ''; vb = b.title?.toLowerCase() || '' }
+    else { va = new Date(a[sortKey] || 0); vb = new Date(b[sortKey] || 0) }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1
+    if (va > vb) return sortDir === 'asc' ? 1 : -1
+    return 0
+  })
+
+    const deleteTemplate = useMutation({ mutationFn: (id) => api.delete(`/templates/${id}`), onSuccess: () => { toast.success('削除しました'); qc.invalidateQueries(['templates']) } })
   const deleteFolder = useMutation({ mutationFn: (id) => api.delete(`/folders/${id}`), onSuccess: () => { toast.success('削除しました'); qc.invalidateQueries(['folders', 'templates']) } })
 
   const bulkDelete = async () => {
@@ -553,6 +569,24 @@ export default function TemplatesPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input className="input pl-8" placeholder="検索..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
+            {/* ソート */}
+            <div className="flex rounded-xl bg-gray-800 border border-gray-700 overflow-hidden shrink-0">
+              {[
+                { key: 'updatedAt', label: '更新日' },
+                { key: 'createdAt', label: '追加日' },
+                { key: 'title',     label: '名前' },
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => toggleSort(key)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all border-r border-gray-700 last:border-0
+                    ${sortKey === key ? 'bg-brand-600/20 text-brand-400' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'}`}>
+                  {label}
+                  {sortKey === key
+                    ? sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+                    : <ArrowUpDown size={11} className="opacity-40" />
+                  }
+                </button>
+              ))}
+            </div>
             {/* フォルダ選択中：テンプレート追加ボタン */}
             {selectedFolder && selectedFolderObj && (
               <button onClick={() => setAddToFolder(selectedFolderObj)} className="btn-secondary whitespace-nowrap">
@@ -580,7 +614,7 @@ export default function TemplatesPage() {
             </div>
           ) : (
             <div className="grid gap-2">
-              {templates.map(t => (
+              {sortedTemplates.map(t => (
                 <div key={t.id}
                   className={`card p-4 flex items-start gap-3 cursor-pointer hover:border-gray-700 transition-colors ${selected.includes(t.id) ? 'border-brand-600/50 bg-brand-600/5' : ''}`}
                   onClick={() => setSelected(p => p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id])}>

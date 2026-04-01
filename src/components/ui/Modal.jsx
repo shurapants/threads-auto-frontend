@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
-export default function Modal({ title, onClose, children, wide = false }) {
+export default function Modal({ title, onClose, children, wide = false, full = false }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -14,8 +14,14 @@ export default function Modal({ title, onClose, children, wide = false }) {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className={`relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl w-full flex flex-col
-        ${wide ? 'max-w-2xl' : 'max-w-md'}`}
+      <div
+        className={`relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl w-full flex flex-col
+          ${full
+            ? 'max-w-[80vw] h-[90vh]'
+            : wide
+              ? 'max-w-2xl max-h-[90vh]'
+              : 'max-w-md max-h-[90vh]'
+          }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 shrink-0">
@@ -26,7 +32,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 overflow-y-auto">
+        <div className="px-6 py-5 overflow-y-auto flex-1">
           {children}
         </div>
       </div>

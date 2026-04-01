@@ -20,6 +20,7 @@ function TokenGenerator({ onTokenReady }) {
   const [redirectUri, setRedirectUri] = useState(() => localStorage.getItem('threads_redirect_uri') || window.location.origin)
   const [step, setStep] = useState(1) // 1: 設定, 2: コード入力, 3: 完了
   const [longToken, setLongToken] = useState('')
+  const [userId, setUserId] = useState('')
   const [loading, setLoading] = useState(false)
 
   const saveSettings = () => {
@@ -62,6 +63,7 @@ function TokenGenerator({ onTokenReady }) {
       }
 
       const shortToken = shortData.access_token
+      const shortUserId = shortData.user_id ? String(shortData.user_id) : ''
 
       // Step2: 長期トークンに変換
       const longRes = await fetch(
@@ -72,9 +74,23 @@ function TokenGenerator({ onTokenReady }) {
         throw new Error(longData.error?.message || '長期トークンの変換に失敗しました')
       }
 
-      setLongToken(longData.access_token)
+      const finalToken = longData.access_token
+      setLongToken(finalToken)
+
+      // Step3: user_idを取得（短期トークンのuser_idを使用、なければprofile APIで取得）
+      let finalUserId = shortUserId
+      if (!finalUserId) {
+        try {
+          const profileRes = await fetch(
+            `https://graph.threads.net/v1.0/me?fields=id,username&access_token=${finalToken}`
+          )
+          const profileData = await profileRes.json()
+          if (profileData.id) finalUserId = String(profileData.id)
+        } catch {}
+      }
+      setUserId(finalUserId)
       setStep(3)
-      toast.success('長期トークンの取得に成功しました！')
+      toast.success('長期トークンとUser IDの取得に成功しました！')
     } catch (err) {
       toast.error(err.message || 'トークン取得に失敗しました')
     } finally {
@@ -88,9 +104,10 @@ function TokenGenerator({ onTokenReady }) {
   }
 
   const useToken = () => {
-    onTokenReady(longToken)
+    onTokenReady(longToken, userId)
     setCode('')
     setLongToken('')
+    setUserId('')
     setStep(1)
     setOpen(false)
   }
@@ -207,16 +224,30 @@ function TokenGenerator({ onTokenReady }) {
           {/* Step 3: Done */}
           {step === 3 && (
             <div className="space-y-3">
-              <div className="bg-green-900/20 border border-green-800/30 rounded-xl px-4 py-3">
-                <p className="text-xs font-semibold text-green-400 mb-2">✓ 長期トークンの取得に成功しました！</p>
-                <div className="relative">
-                  <input className="input font-mono text-xs pr-24" value={longToken} readOnly />
-                  <button onClick={copyToken}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary text-xs py-1 px-2">
-                    <Copy size={11} /> コピー
-                  </button>
+              <div className="bg-green-900/20 border border-green-800/30 rounded-xl px-4 py-3 space-y-2">
+                <p className="text-xs font-semibold text-green-400">✓ 長期トークンとUser IDの取得に成功しました！</p>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">長期アクセストークン（有効期限：約60日）</p>
+                  <div className="relative">
+                    <input className="input font-mono text-xs pr-24" value={longToken} readOnly />
+                    <button onClick={copyToken}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary text-xs py-1 px-2">
+                      <Copy size={11} /> コピー
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">有効期限：約60日（更新可能）</p>
+                {userId && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Threads User ID（数字）</p>
+                    <div className="relative">
+                      <input className="input font-mono text-xs pr-24" value={userId} readOnly />
+                      <button onClick={() => { navigator.clipboard.writeText(userId); toast.success('コピーしました') }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary text-xs py-1 px-2">
+                        <Copy size={11} /> コピー
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between">
@@ -234,11 +265,11 @@ function TokenGenerator({ onTokenReady }) {
 }
 
 // ── アカウント追加モーダル ───────────────────────────────────────
-function AddAccountModal({ onClose, proxies, initialToken = '' }) {
+function AddAccountModal({ onClose, proxies, initialToken = '', initialUserId = '' }) {
   const qc = useQueryClient()
   const [form, setForm] = useState({
     accessToken: initialToken,
-    threadsUserId: '',
+    threadsUserId: initialUserId,
     username: '',
     displayName: ''
   })
@@ -343,6 +374,7 @@ export default function AccountsPage() {
   const navigate = useNavigate()
   const [showAdd, setShowAdd] = useState(false)
   const [initialToken, setInitialToken] = useState('')
+  const [initialUserId, setInitialUserId] = useState('')
   const [testAccount, setTestAccount] = useState(null)
   const [statuses, setStatuses] = useState({})
   const [checkingAll, setCheckingAll] = useState(false)
@@ -387,8 +419,9 @@ export default function AccountsPage() {
     toast.success('全アカウントの状態確認が完了しました')
   }
 
-  const handleTokenReady = (token) => {
+  const handleTokenReady = (token, userId) => {
     setInitialToken(token)
+    setInitialUserId(userId || '')
     setShowAdd(true)
   }
 
@@ -437,29 +470,11 @@ export default function AccountsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <a
-                      href={`https://www.threads.net/@${acc.username}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-gray-200 hover:text-brand-400 transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      {acc.displayName}
-                    </a>
+                    <p className="font-medium text-gray-200">{acc.displayName}</p>
                     <span className={acc.isActive ? 'badge-green' : 'badge-gray'}>{acc.isActive ? 'アクティブ' : '停止中'}</span>
                     <StatusBadge status={statuses[acc.id]} />
                   </div>
-                  <p className="text-sm text-gray-500">
-                    <a
-                      href={`https://www.threads.net/@${acc.username}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-brand-400 transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      @{acc.username}
-                    </a>
-                  </p>
+                  <p className="text-sm text-gray-500">@{acc.username}</p>
                 </div>
                 <select
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 w-36"
@@ -492,7 +507,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {showAdd && <AddAccountModal onClose={() => { setShowAdd(false); setInitialToken('') }} proxies={proxies} initialToken={initialToken} />}
+      {showAdd && <AddAccountModal onClose={() => { setShowAdd(false); setInitialToken(''); setInitialUserId('') }} proxies={proxies} initialToken={initialToken} initialUserId={initialUserId} />}
       {testAccount && <TestPostModal account={testAccount} onClose={() => setTestAccount(null)} />}
     </div>
   )

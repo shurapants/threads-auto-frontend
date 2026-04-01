@@ -330,36 +330,121 @@ function AddAccountModal({ onClose, proxies, initialToken = '', initialUserId = 
 }
 
 function TestPostModal({ account, onClose }) {
+  const [mode, setMode] = useState('manual') // 'manual' | 'template'
   const [content, setContent] = useState('')
+  const [selectedFolderId, setSelectedFolderId] = useState('')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const { data: folders = [] } = useQuery({ queryKey: ['folders'], queryFn: () => api.get('/folders') })
+  const { data: templates = [] } = useQuery({
+    queryKey: ['templates', selectedFolderId],
+    queryFn: () => api.get(selectedFolderId ? `/templates?folderId=${selectedFolderId}` : '/templates')
+  })
+
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId)
+
+  const getPreview = (t) => {
+    if (!t) return ''
+    try { const p = JSON.parse(t.content); if (Array.isArray(p)) return p[0] } catch {}
+    return t.content
+  }
+
+  const resolveContent = () => {
+    if (mode === 'manual') return content
+    if (selectedTemplate) return getPreview(selectedTemplate)
+    if (selectedFolderId && templates.length > 0) {
+      const t = templates[Math.floor(Math.random() * templates.length)]
+      return getPreview(t)
+    }
+    return ''
+  }
+
   const submit = async (e) => {
-    e.preventDefault(); setLoading(true)
+    e.preventDefault()
+    const postContent = resolveContent()
+    if (!postContent) { toast.error('投稿内容を設定してください'); return }
+    setLoading(true)
     try {
-      await api.post(`/accounts/${account.id}/test`, { content })
+      await api.post(`/accounts/${account.id}/test`, { content: postContent })
       toast.success('テスト投稿が完了しました！'); onClose()
     } catch (err) { toast.error(err.error || '投稿に失敗しました') } finally { setLoading(false) }
   }
+
   return (
     <Modal title={`テスト投稿 — @${account.username}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <div>
-          <label className="label">投稿内容</label>
-          <textarea className="input resize-none" rows={4} required maxLength={500}
-            placeholder="投稿するテキストを入力..."
-            value={content} onChange={e => setContent(e.target.value)} />
-          <p className="text-xs text-gray-600 mt-1 text-right">{content.length}/500</p>
+        {/* モード切替 */}
+        <div className="flex rounded-xl bg-gray-800 p-1 gap-1">
+          {[
+            { v: 'manual', label: '手打ち' },
+            { v: 'template', label: 'テンプレートから選択' },
+          ].map(({ v, label }) => (
+            <button key={v} type="button" onClick={() => setMode(v)}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all
+                ${mode === v ? 'bg-gray-700 text-gray-100 shadow' : 'text-gray-400 hover:text-gray-200'}`}>
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* 手打ちモード */}
+        {mode === 'manual' && (
+          <div>
+            <label className="label">投稿内容</label>
+            <textarea className="input resize-none" rows={5} required maxLength={500}
+              placeholder="投稿するテキストを入力..."
+              value={content} onChange={e => setContent(e.target.value)} />
+            <p className="text-xs text-gray-600 mt-1 text-right">{content.length}/500</p>
+          </div>
+        )}
+
+        {/* テンプレートモード */}
+        {mode === 'template' && (
+          <div className="space-y-3">
+            <div>
+              <label className="label">フォルダ（任意）</label>
+              <select className="input" value={selectedFolderId}
+                onChange={e => { setSelectedFolderId(e.target.value); setSelectedTemplateId('') }}>
+                <option value="">すべてのテンプレート</option>
+                {folders.map(f => <option key={f.id} value={f.id}>{f.name}（{f._count?.templates}件）</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">テンプレート</label>
+              <select className="input" value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}>
+                <option value="">
+                  {selectedFolderId ? 'フォルダからランダムに選択' : 'テンプレートを選択'}
+                </option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+            </div>
+
+            {/* プレビュー */}
+            {(selectedTemplate || selectedFolderId) && (
+              <div className="bg-gray-800 rounded-xl px-4 py-3">
+                <p className="text-xs text-gray-500 mb-1.5">
+                  {selectedTemplate ? 'プレビュー' : '投稿時にランダムで選択されます'}
+                </p>
+                <p className="text-sm text-gray-300 whitespace-pre-wrap line-clamp-4">
+                  {selectedTemplate ? getPreview(selectedTemplate) : `${templates.length}件のテンプレートからランダム投稿`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">キャンセル</button>
-          <button type="submit" disabled={loading || !content} className="btn-primary">
+          <button type="submit" disabled={loading || (mode === 'manual' && !content) || (mode === 'template' && !selectedFolderId && !selectedTemplateId)}
+            className="btn-primary">
             <Send size={14} /> {loading ? '投稿中...' : '投稿する'}
           </button>
         </div>
       </form>
     </Modal>
   )
-}
-
 function StatusBadge({ status }) {
   if (!status) return null
   if (status === 'checking') return <span className="badge badge-yellow flex items-center gap-1"><Loader size={10} className="animate-spin" /> 確認中</span>

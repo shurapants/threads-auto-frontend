@@ -557,11 +557,27 @@ export default function AccountsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-gray-200">{acc.displayName}</p>
+                    <a
+                      href={`https://www.threads.net/@${acc.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-gray-200 hover:text-brand-400 transition-colors"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {acc.displayName}
+                    </a>
                     <span className={acc.isActive ? 'badge-green' : 'badge-gray'}>{acc.isActive ? 'アクティブ' : '停止中'}</span>
                     <StatusBadge status={statuses[acc.id]} />
                   </div>
-                  <p className="text-sm text-gray-500">@{acc.username}</p>
+                  <a
+                    href={`https://www.threads.net/@${acc.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-gray-500 hover:text-brand-400 transition-colors"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    @{acc.username}
+                  </a>
                 </div>
                 <select
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 w-36"

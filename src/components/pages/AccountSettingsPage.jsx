@@ -421,4 +421,114 @@ export default function AccountSettingsPage() {
                   </div>
                 )}
                 {Object.keys(calendarSlots).length > 0 && (
-                  <div class
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500 font-medium">設定済みの日付</p>
+                    {Object.entries(calendarSlots).sort().map(([dateStr, slots]) => (
+                      <button key={dateStr} type="button" onClick={() => setSelectedDate(dateStr)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all
+                          ${selectedDate === dateStr ? 'bg-brand-600/20 border border-brand-600/40' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                        <span className="text-gray-300">{format(new Date(dateStr), 'M月d日(E)', { locale: ja })}</span>
+                        <span className="badge-blue">{slots.length}件</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button onClick={handleSave} disabled={saving || totalSlots === 0}
+              className="btn-primary w-full justify-center py-2.5">
+              <Save size={15} />
+              {saving ? '保存中...' : `スケジュールを保存（${totalSlots}件）`}
+            </button>
+          </div>
+        </div>
+
+        {/* Right: existing schedules */}
+        <div className="space-y-3">
+          <h2 className="font-semibold text-gray-300 text-sm flex items-center gap-2">
+            <Calendar size={14} /> 登録済みスケジュール
+            <span className="badge-blue">{existingSchedules.length}件</span>
+          </h2>
+
+          {existingSchedules.length === 0 ? (
+            <div className="card p-6 text-center"><p className="text-sm text-gray-600">スケジュールなし</p></div>
+          ) : (
+            <div className="space-y-2 max-h-[700px] overflow-y-auto">
+              {[...existingSchedules]
+                .sort((a, b) => {
+                  const aTime = (a.timeHour ?? 0) * 60 + (a.timeMinute ?? 0)
+                  const bTime = (b.timeHour ?? 0) * 60 + (b.timeMinute ?? 0)
+                  return aTime - bTime
+                })
+                .map(s => (
+                  <div key={s.id} className="card p-3 space-y-2">
+                    {/* 時間・曜日・ON/OFF・削除 */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold font-mono text-brand-400">
+                            {s.scheduleType === 'weekly'
+                              ? `${String(s.timeHour).padStart(2,'0')}:${String(s.timeMinute).padStart(2,'0')}`
+                              : format(new Date(s.calendarDates?.[0] || Date.now()), 'M/d HH:mm')
+                            }
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {s.scheduleType === 'weekly'
+                              ? s.weekdays.map(d => WEEKDAY_LABELS[d]).join('・')
+                              : 'カレンダー'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => toggleSchedule(s)}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium transition-all
+                            ${s.isActive ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}
+                        >
+                          {s.isActive ? 'ON' : 'OFF'}
+                        </button>
+                        <button onClick={() => deleteSchedule(s.id)} className="btn-ghost p-1.5 text-red-500">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* テンプレート選択（インライン） */}
+                    <select
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 outline-none"
+                      value={s.folderId ? `folder:${s.folderId}` : s.templateId ? `template:${s.templateId}` : ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val.startsWith('folder:')) updateScheduleTemplate(s, val.replace('folder:', ''), '')
+                        else if (val.startsWith('template:')) updateScheduleTemplate(s, '', val.replace('template:', ''))
+                        else updateScheduleTemplate(s, '', '')
+                      }}
+                    >
+                      <option value="">テンプレート未設定</option>
+                      {folders.length > 0 && (
+                        <optgroup label="── フォルダ（ランダム）">
+                          {folders.map(f => (
+                            <option key={f.id} value={`folder:${f.id}`}>📁 {f.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {templates.length > 0 && (
+                        <optgroup label="── テンプレート（固定）">
+                          {templates.map(t => (
+                            <option key={t.id} value={`template:${t.id}`}>📄 {t.title}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

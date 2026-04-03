@@ -5,7 +5,21 @@ import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
 
-const FOLDER_COLORS = ['#6272f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899']
+// 11原色 × 7明度 = 77色（2段階選択）
+const COLOR_PALETTE = [
+  { name: 'インディゴ', base: '#6272f1', shades: ['#08115d','#0c1a8c','#1125c4','#1e35ea','#5163ef','#808df3','#afb7f7'] },
+  { name: 'グリーン',   base: '#10b981', shades: ['#085d41','#0c8c62','#11c589','#1deba7','#51efbb','#80f4cd','#aff8df'] },
+  { name: 'イエロー',   base: '#f59e0b', shades: ['#613f04','#925e06','#cd8408','#f5a113','#f7b649','#f9ca7a','#fbddab'] },
+  { name: 'レッド',     base: '#ef4444', shades: ['#5d0808','#8c0c0c','#c51010','#eb1d1d','#f05151','#f48080','#f8afaf'] },
+  { name: 'パープル',   base: '#8b5cf6', shades: ['#210560','#310890','#450bca','#5917f2','#7f4cf5','#a27cf7','#c4acfa'] },
+  { name: 'シアン',     base: '#06b6d4', shades: ['#025563','#047f94','#05b2d0','#10d6f8','#47dff9','#79e8fb','#aaf0fc'] },
+  { name: 'オレンジ',   base: '#f97316', shades: ['#632a02','#953f03','#d05805','#f86f10','#fa9047','#fbae78','#fcccaa'] },
+  { name: 'ピンク',     base: '#ec4899', shades: ['#5c0932','#8a0e4b','#c2146a','#e72183','#ed549f','#f282b9','#f6b0d3'] },
+  { name: 'グレー',     base: '#6b7280', shades: ['#2e3137','#454a53','#616774','#79808f','#989da9','#b3b8c0','#cfd2d7'] },
+  { name: 'ライム',     base: '#84cc16', shades: ['#3b5c09','#598a0e','#7dc114','#99e722','#b0ec54','#c5f182','#daf6b0'] },
+  { name: 'フクシャ',   base: '#d946ef', shades: ['#52085d','#7c0c8c','#ad11c5','#d01deb','#db51ef','#e480f4','#eeaff8'] },
+]
+const FOLDER_COLORS = COLOR_PALETTE.flatMap(p => p.shades)
 
 // ── CSVインポートモーダル ──────────────────────────────────────
 function CsvImportModal({ folders, onClose }) {
@@ -206,6 +220,10 @@ function FolderModal({ folder, onClose }) {
   const [form, setForm] = useState({ name: folder?.name || '', color: folder?.color || '#6272f1' })
   const [loading, setLoading] = useState(false)
   const isEdit = !!folder
+
+  // 現在選択中の色がどの原色グループに属するか
+  const findBaseGroup = (color) => COLOR_PALETTE.find(p => p.shades.includes(color)) || COLOR_PALETTE[0]
+  const [selectedBase, setSelectedBase] = useState(() => findBaseGroup(folder?.color || '#6272f1'))
   const submit = async (e) => {
     e.preventDefault(); setLoading(true)
     try {
@@ -221,14 +239,50 @@ function FolderModal({ folder, onClose }) {
           <label className="label">フォルダ名</label>
           <input className="input" required placeholder="フォルダ名" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         </div>
-        <div>
+        <div className="space-y-3">
           <label className="label">カラー</label>
-          <div className="flex gap-2 flex-wrap">
-            {FOLDER_COLORS.map(c => (
-              <button key={c} type="button"
-                className={`w-7 h-7 rounded-lg transition-all ${form.color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 scale-110' : ''}`}
-                style={{ backgroundColor: c }} onClick={() => setForm(p => ({ ...p, color: c }))} />
-            ))}
+
+          {/* Step1: 原色を選ぶ */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">① 色を選ぶ</p>
+            <div className="flex flex-wrap gap-2">
+              {COLOR_PALETTE.map(p => (
+                <button key={p.name} type="button"
+                  onClick={() => {
+                    setSelectedBase(p)
+                    setForm(prev => ({ ...prev, color: p.shades[3] }))
+                  }}
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all
+                    ${selectedBase.name === p.name ? 'bg-gray-700 ring-2 ring-white/30' : 'hover:bg-gray-800'}`}
+                >
+                  <div className="w-7 h-7 rounded-lg" style={{ backgroundColor: p.base }} />
+                  <span className="text-xs text-gray-400 leading-none">{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Step2: 明度を選ぶ */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">② 明るさを選ぶ（暗 → 明）</p>
+            <div className="flex gap-2">
+              {selectedBase.shades.map((shade, i) => (
+                <button key={shade} type="button"
+                  onClick={() => setForm(p => ({ ...p, color: shade }))}
+                  className={`flex-1 h-9 rounded-xl transition-all
+                    ${form.color === shade ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900 scale-105' : 'hover:scale-105'}`}
+                  style={{ backgroundColor: shade }}
+                  title={`明度 ${i + 1}/7`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* プレビュー */}
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-md flex-shrink-0" style={{ backgroundColor: form.color }} />
+            <span className="text-xs font-mono text-gray-400">{form.color}</span>
+            <span className="text-xs text-gray-600">— {selectedBase.name}</span>
           </div>
         </div>
         <div className="flex justify-end gap-2">

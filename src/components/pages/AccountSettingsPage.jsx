@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  isSameDay, addMonths, subMonths, parseISO
+  isSameDay, addMonths, subMonths
 } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import api from '../../utils/api'
@@ -16,7 +16,6 @@ import toast from 'react-hot-toast'
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 const WEEKDAY_FULL = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日']
 
-// 5分刻みの時間リスト生成
 const TIME_SLOTS = []
 for (let h = 0; h < 24; h++) {
   for (let m = 0; m < 60; m += 5) {
@@ -24,7 +23,6 @@ for (let h = 0; h < 24; h++) {
   }
 }
 
-// ── 時間グリッド ────────────────────────────────────────────────
 function TimeGrid({ onSelect }) {
   return (
     <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
@@ -38,7 +36,6 @@ function TimeGrid({ onSelect }) {
   )
 }
 
-// ── 時間×テンプレ 1行 ────────────────────────────────────────
 function SlotRow({ slot, folders, templates, onUpdate, onRemove }) {
   return (
     <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2">
@@ -72,7 +69,6 @@ function SlotRow({ slot, folders, templates, onUpdate, onRemove }) {
   )
 }
 
-// ── カレンダー ──────────────────────────────────────────────────
 function MiniCalendar({ markedDates, onSelectDate }) {
   const [viewDate, setViewDate] = useState(new Date())
   const days = eachDayOfInterval({ start: startOfMonth(viewDate), end: endOfMonth(viewDate) })
@@ -99,11 +95,10 @@ function MiniCalendar({ markedDates, onSelectDate }) {
           const dow = day.getDay()
           return (
             <button key={dateStr} type="button" onClick={() => onSelectDate(dateStr)}
-              className={`aspect-square rounded-lg text-xs font-medium transition-all relative
+              className={`aspect-square rounded-lg text-xs font-medium transition-all
                 ${isMarked ? 'bg-brand-600 text-white' : isToday ? 'bg-gray-700 text-brand-400' : 'hover:bg-gray-700'}
                 ${!isMarked && dow === 0 ? 'text-red-400' : !isMarked && dow === 6 ? 'text-blue-400' : !isMarked ? 'text-gray-300' : ''}`}>
               {format(day, 'd')}
-              {isMarked && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full" />}
             </button>
           )
         })}
@@ -113,25 +108,21 @@ function MiniCalendar({ markedDates, onSelectDate }) {
   )
 }
 
-// ── メインページ ────────────────────────────────────────────────
 export default function AccountSettingsPage() {
   const { accountId } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  const [mode, setMode] = useState('daily') // 'daily' | 'weekly' | 'calendar'
+  const [mode, setMode] = useState('daily')
   const [saving, setSaving] = useState(false)
 
-  // ① 毎日: [{ label, hour, minute, folderId, templateId }]
   const [dailySlots, setDailySlots] = useState([])
   const [showDailyGrid, setShowDailyGrid] = useState(false)
 
-  // ② 曜日ごと: { 0: [...slots], 1: [...slots], ..., 6: [...slots] }
   const [weeklySlots, setWeeklySlots] = useState({ 0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[] })
   const [activeWeekday, setActiveWeekday] = useState(1)
   const [showWeeklyGrid, setShowWeeklyGrid] = useState(false)
 
-  // ③ カレンダー: { 'yyyy-MM-dd': [...slots] }
   const [calendarSlots, setCalendarSlots] = useState({})
   const [selectedDate, setSelectedDate] = useState(null)
   const [showCalendarGrid, setShowCalendarGrid] = useState(false)
@@ -149,29 +140,14 @@ export default function AccountSettingsPage() {
     queryFn: () => api.get('/schedules').then(list => list.filter(s => s.accountId === accountId))
   })
 
-  // スロット追加ヘルパー
   const addSlot = (slot, target, setTarget) => {
-    if (target.some(s => s.label === slot.label)) {
-      toast.error('その時間はすでに追加されています')
-      return
-    }
+    if (target.some(s => s.label === slot.label)) { toast.error('その時間はすでに追加されています'); return }
     setTarget([...target, { ...slot, folderId: '', templateId: '' }].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)))
   }
 
-  const updateSlot = (slots, setSlots, idx, updated) => {
-    setSlots(slots.map((s, i) => i === idx ? updated : s))
-  }
-
-  const removeSlot = (slots, setSlots, idx) => {
-    setSlots(slots.filter((_, i) => i !== idx))
-  }
-
-  // カレンダー日付選択
   const handleSelectDate = (dateStr) => {
     setSelectedDate(dateStr)
-    if (!calendarSlots[dateStr]) {
-      setCalendarSlots(p => ({ ...p, [dateStr]: [] }))
-    }
+    if (!calendarSlots[dateStr]) setCalendarSlots(p => ({ ...p, [dateStr]: [] }))
     setShowCalendarGrid(false)
   }
 
@@ -183,28 +159,21 @@ export default function AccountSettingsPage() {
     setShowCalendarGrid(false)
   }
 
-  // 保存処理
   const handleSave = async () => {
     const name = scheduleName || `${account?.displayName}`
     setSaving(true)
     try {
       let count = 0
-
       if (mode === 'daily') {
         if (dailySlots.length === 0) { toast.error('時間を1つ以上追加してください'); setSaving(false); return }
         for (const slot of dailySlots) {
           await api.post('/schedules', {
-            name: `${name} 毎日 ${slot.label}`,
-            accountId,
-            scheduleType: 'weekly',
-            weekdays: [0, 1, 2, 3, 4, 5, 6],
-            timeHour: slot.hour,
-            timeMinute: slot.minute,
+            name: `${name} 毎日 ${slot.label}`, accountId,
+            scheduleType: 'weekly', weekdays: [0,1,2,3,4,5,6],
+            timeHour: slot.hour, timeMinute: slot.minute,
             postMode: slot.folderId ? 'random' : slot.templateId ? 'fixed' : 'random',
-            folderId: slot.folderId || null,
-            templateId: slot.templateId || null,
-            timezone: 'Asia/Tokyo',
-            isActive: true
+            folderId: slot.folderId || null, templateId: slot.templateId || null,
+            timezone: 'Asia/Tokyo', isActive: true
           })
           count++
         }
@@ -212,17 +181,12 @@ export default function AccountSettingsPage() {
         for (const [dayStr, slots] of Object.entries(weeklySlots)) {
           for (const slot of slots) {
             await api.post('/schedules', {
-              name: `${name} ${WEEKDAY_FULL[parseInt(dayStr)]} ${slot.label}`,
-              accountId,
-              scheduleType: 'weekly',
-              weekdays: [parseInt(dayStr)],
-              timeHour: slot.hour,
-              timeMinute: slot.minute,
+              name: `${name} ${WEEKDAY_FULL[parseInt(dayStr)]} ${slot.label}`, accountId,
+              scheduleType: 'weekly', weekdays: [parseInt(dayStr)],
+              timeHour: slot.hour, timeMinute: slot.minute,
               postMode: slot.folderId ? 'random' : 'fixed',
-              folderId: slot.folderId || null,
-              templateId: slot.templateId || null,
-              timezone: 'Asia/Tokyo',
-              isActive: true
+              folderId: slot.folderId || null, templateId: slot.templateId || null,
+              timezone: 'Asia/Tokyo', isActive: true
             })
             count++
           }
@@ -233,26 +197,20 @@ export default function AccountSettingsPage() {
           for (const slot of slots) {
             const dt = new Date(`${dateStr}T${slot.label}:00`)
             await api.post('/schedules', {
-              name: `${name} ${dateStr} ${slot.label}`,
-              accountId,
-              scheduleType: 'calendar',
-              calendarDates: [dt.toISOString()],
+              name: `${name} ${dateStr} ${slot.label}`, accountId,
+              scheduleType: 'calendar', calendarDates: [dt.toISOString()],
               postMode: slot.folderId ? 'random' : 'fixed',
-              folderId: slot.folderId || null,
-              templateId: slot.templateId || null,
-              timezone: 'Asia/Tokyo',
-              isActive: true
+              folderId: slot.folderId || null, templateId: slot.templateId || null,
+              timezone: 'Asia/Tokyo', isActive: true
             })
             count++
           }
         }
         if (count === 0) { toast.error('日付・時間を設定してください'); setSaving(false); return }
       }
-
       toast.success(`${count}件のスケジュールを保存しました`)
       qc.invalidateQueries(['schedules'])
       refetchSchedules()
-      // リセット
       setDailySlots([])
       setWeeklySlots({ 0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[] })
       setCalendarSlots({})
@@ -282,7 +240,7 @@ export default function AccountSettingsPage() {
       })
       toast.success('テンプレートを更新しました')
       refetchSchedules()
-    } catch (err) {
+    } catch {
       toast.error('更新に失敗しました')
     }
   }
@@ -318,14 +276,11 @@ export default function AccountSettingsPage() {
         {/* Left: form */}
         <div className="lg:col-span-2 space-y-4">
           <div className="card p-5 space-y-5">
-
-            {/* Schedule name */}
             <div>
               <label className="label">スケジュール名（任意）</label>
               <input className="input" placeholder="例: 朝の投稿" value={scheduleName} onChange={e => setScheduleName(e.target.value)} />
             </div>
 
-            {/* Mode selector */}
             <div>
               <label className="label">スケジュールタイプ</label>
               <div className="flex rounded-xl bg-gray-800 p-1 gap-1">
@@ -343,43 +298,38 @@ export default function AccountSettingsPage() {
               </div>
             </div>
 
-            {/* ① 毎日繰り返し */}
+            {/* 毎日 */}
             {mode === 'daily' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="label mb-0 flex items-center gap-2">
-                    <Clock size={13} /> 投稿時間を追加
-                  </label>
+                  <label className="label mb-0 flex items-center gap-2"><Clock size={13} /> 投稿時間を追加</label>
                   <button type="button" onClick={() => setShowDailyGrid(p => !p)} className="btn-secondary text-xs py-1.5">
                     <Plus size={13} /> 時間を追加
                   </button>
                 </div>
-
                 {showDailyGrid && (
                   <div className="space-y-2">
                     <p className="text-xs text-gray-500">時間をクリックして追加</p>
                     <TimeGrid onSelect={slot => { addSlot(slot, dailySlots, setDailySlots); setShowDailyGrid(false) }} />
                   </div>
                 )}
-
                 {dailySlots.length === 0 ? (
                   <p className="text-xs text-gray-600 text-center py-4">時間が未設定です</p>
                 ) : (
                   <div className="space-y-2">
                     {dailySlots.map((slot, i) => (
                       <SlotRow key={i} slot={slot} folders={folders} templates={templates}
-                        onUpdate={updated => updateSlot(dailySlots, setDailySlots, i, updated)}
-                        onRemove={() => removeSlot(dailySlots, setDailySlots, i)} />
+                        onUpdate={updated => setDailySlots(dailySlots.map((s, idx) => idx === i ? updated : s))}
+                        onRemove={() => setDailySlots(dailySlots.filter((_, idx) => idx !== i))} />
                     ))}
                   </div>
                 )}
               </div>
             )}
 
-            {/* ② 曜日ごと */}
+            {/* 曜日ごと */}
             {mode === 'weekly' && (
               <div className="space-y-3">
-                {/* Weekday tabs */}
                 <div className="flex gap-1">
                   {WEEKDAY_LABELS.map((d, i) => (
                     <button key={i} type="button" onClick={() => { setActiveWeekday(i); setShowWeeklyGrid(false) }}
@@ -394,7 +344,6 @@ export default function AccountSettingsPage() {
                     </button>
                   ))}
                 </div>
-
                 <div className="bg-gray-800/50 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-gray-300">{WEEKDAY_FULL[activeWeekday]}の設定</p>
@@ -402,7 +351,6 @@ export default function AccountSettingsPage() {
                       <Plus size={12} /> 時間を追加
                     </button>
                   </div>
-
                   {showWeeklyGrid && (
                     <div className="space-y-1">
                       <p className="text-xs text-gray-500">時間をクリックして追加</p>
@@ -415,7 +363,6 @@ export default function AccountSettingsPage() {
                       }} />
                     </div>
                   )}
-
                   {weeklySlots[activeWeekday].length === 0 ? (
                     <p className="text-xs text-gray-600 text-center py-3">時間が未設定です</p>
                   ) : (
@@ -431,14 +378,10 @@ export default function AccountSettingsPage() {
               </div>
             )}
 
-            {/* ③ カレンダー */}
+            {/* カレンダー */}
             {mode === 'calendar' && (
               <div className="space-y-3">
-                <MiniCalendar
-                  markedDates={Object.keys(calendarSlots)}
-                  onSelectDate={handleSelectDate}
-                />
-
+                <MiniCalendar markedDates={Object.keys(calendarSlots)} onSelectDate={handleSelectDate} />
                 {selectedDate && (
                   <div className="bg-gray-800/50 rounded-xl p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -455,3 +398,27 @@ export default function AccountSettingsPage() {
                             className="btn-ghost text-xs py-1 text-red-500">
                             <X size={12} />
                           </button>
+                        )}
+                      </div>
+                    </div>
+                    {showCalendarGrid && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">時間をクリックして追加</p>
+                        <TimeGrid onSelect={addCalendarSlot} />
+                      </div>
+                    )}
+                    {(calendarSlots[selectedDate] || []).length === 0 ? (
+                      <p className="text-xs text-gray-600 text-center py-2">時間が未設定です</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(calendarSlots[selectedDate] || []).map((slot, i) => (
+                          <SlotRow key={i} slot={slot} folders={folders} templates={templates}
+                            onUpdate={updated => setCalendarSlots(p => ({ ...p, [selectedDate]: p[selectedDate].map((s, idx) => idx === i ? updated : s) }))}
+                            onRemove={() => setCalendarSlots(p => ({ ...p, [selectedDate]: p[selectedDate].filter((_, idx) => idx !== i) }))} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {Object.keys(calendarSlots).length > 0 && (
+                  <div class

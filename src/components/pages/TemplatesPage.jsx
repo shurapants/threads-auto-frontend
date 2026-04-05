@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown, Smile } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
@@ -211,6 +211,109 @@ function CsvImportModal({ folders, onClose }) {
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ── 絵文字データ ──────────────────────────────────────────────
+const EMOJI_CATEGORIES = [
+  {
+    label: '😀 よく使う',
+    emojis: ['😀','😂','🥹','😊','😍','🥰','😎','🤩','🥳','😭','😅','🙏','👍','❤️','🔥','✨','🎉','💯','👏','🫶','💪','🤔','😤','🙄','😏','🤭','😮','😱','🥺','😴']
+  },
+  {
+    label: '❤️ ハート',
+    emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💕','💞','💓','💗','💖','💝','💘','💟','❣️','♥️','🫀','💔','❤️‍🔥','❤️‍🩹']
+  },
+  {
+    label: '👋 人物',
+    emojis: ['👋','🤚','✋','🖖','🫱','🫲','🫳','🫴','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏','💅','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄','🫦']
+  },
+  {
+    label: '🐶 動物',
+    emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐟','🐠','🐬','🐳','🐋','🦈','🦭','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦏','🦛','🦒','🦘','🦬','🐃','🐂','🐄','🦙','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔']
+  },
+  {
+    label: '🌸 自然',
+    emojis: ['🌸','🌺','🌻','🌹','🥀','🌷','💐','🌼','🪷','🪸','🌿','🍀','🍁','🍂','🍃','🌱','🌲','🌳','🌴','🪵','🌵','🎋','🎄','🌾','🪨','🌊','💧','💦','🌈','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💨','🌪️','🌫️','🌊','🌀','🌈','🌂','☂️','☔','⛱️','⚡','🔥','💥','🌟','⭐','🌙','🌛','🌜','🌚','🌕','🌖','🌗','🌘','🌑','🌒','🌓','🌔','🌙','🌍','🌎','🌏','🪐','💫','⭐','🌟','✨','🌠','🌌','☄️']
+  },
+  {
+    label: '🍕 食べ物',
+    emojis: ['🍕','🍔','🌮','🌯','🥙','🧆','🥚','🍳','🧇','🥞','🧈','🍞','🥖','🥨','🧀','🥗','🥘','🍲','🫕','🥣','🫙','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡','🦀','🦞','🦐','🦑','🦪','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍑','🥭','🍍','🥥','🥝','🍅','🫒','🥑','🍆','🥔','🥕','🌽','🌶️','🫑','🥒','🥬','🧅','🧄','🥜','🫘','🌰','🍄','🧆','🥗']
+  },
+  {
+    label: '⚽ スポーツ',
+    emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥅','⛳','🪃','🏹','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪁','🎮','🕹️','🎲','♟️','🧩','🧸','🪅','🪆','🎭','🎨','🖼️','🎰','🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🚌','🚍','🚎','🚐','🚑','🚒','🚓','🚔','🚕','🚖','🚗','🚘','🚙','🛻','🚚','🚛','🚜','🏎️','🏍️','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️']
+  },
+  {
+    label: '💼 仕事',
+    emojis: ['💼','📁','📂','🗂️','📋','📊','📈','📉','📝','✏️','🖊️','🖋️','📌','📍','📎','🖇️','📏','📐','✂️','🗃️','🗄️','🗑️','🔒','🔓','🔑','🗝️','🔨','🪓','⛏️','⚒️','🛠️','🗡️','⚔️','🛡️','🔧','🔩','⚙️','🗜️','🔗','⛓️','🪝','🧲','🔫','💡','🔦','🕯️','🪔','🧯','🛢️','💰','💴','💵','💶','💷','💸','💳','🪙','💹','✉️','📧','📨','📩','📤','📥','📦','📫','📪','📬','📭','📮','🗳️','📯','📣','📢','🔔','🔕','🎵','🎶','📻','📺','📷','📸','📹','🎥','📽️','🎞️','📞','☎️','📟','📠']
+  },
+  {
+    label: '🎊 記号',
+    emojis: ['✅','❌','⭕','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔸','🔹','🔺','🔻','💠','🔘','🔲','🔳','▪️','▫️','◾','◽','◼️','◻️','⬛','⬜','🟥','🟧','🟨','🟩','🟦','🟪','⬛','⬜','🔈','🔉','🔊','📢','📣','🔔','🔕','🎵','🎶','💤','🔅','🔆','📶','🛜','📳','📴','📵','📱','📲','☎️','📞','📟','📠','♻️','🔱','📛','🔰','⭕','✅','❎','🌐','💠','Ⓜ️','🌀','💤','🏧','🚾','♿','🅿️','🛗','🈳','🈹','🈵','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘','❗','❕','❓','❔','‼️','⁉️','🔅','🔆','〽️','⚠️','🚸','🔱','⚜️','🔰','♻️','✅','🈶','🈚','🈸','🈺','🈷️','✴️','🆚','💟','🆓','🆙','🆒','🆕','🆖','🎦','🈁','🆗','🅰️','🅱️','🆎','🆑','🅾️','🆘','🔛','🔙','🔚','🔝','🔜','⏩','⏪','⏫','⏬','⬅️','➡️','⬆️','⬇️','↗️','↘️','↙️','↖️','↕️','↔️','↩️','↪️','⤴️','⤵️','🔀','🔁','🔂','▶️','⏸️','⏹️','⏺️','⏭️','⏮️','⏯️','🔼','🔽','➕','➖','➗','✖️','💲','❗','❓','〰️','©️','®️','™️']
+  },
+]
+
+// ── 絵文字ピッカーコンポーネント ──────────────────────────────
+function EmojiPicker({ onSelect, onClose }) {
+  const [activeCategory, setActiveCategory] = useState(0)
+  const [search, setSearch] = useState('')
+
+  const filteredEmojis = search
+    ? EMOJI_CATEGORIES.flatMap(c => c.emojis).filter(e => e.includes(search))
+    : EMOJI_CATEGORIES[activeCategory].emojis
+
+  return (
+    <div className="absolute z-50 right-0 top-full mt-1 w-72 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+      {/* 検索 */}
+      <div className="p-2 border-b border-gray-800">
+        <input
+          className="w-full bg-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none placeholder-gray-600"
+          placeholder="絵文字を検索..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          autoFocus
+        />
+      </div>
+
+      {/* カテゴリタブ */}
+      {!search && (
+        <div className="flex overflow-x-auto border-b border-gray-800 bg-gray-900">
+          {EMOJI_CATEGORIES.map((cat, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveCategory(i)}
+              className={`shrink-0 px-2 py-1.5 text-sm transition-colors
+                ${activeCategory === i ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-300'}`}
+              title={cat.label}
+            >
+              {cat.emojis[0]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 絵文字グリッド */}
+      <div className="grid grid-cols-8 gap-0.5 p-2 max-h-48 overflow-y-auto">
+        {filteredEmojis.map((emoji, i) => (
+          <button
+            key={i}
+            onClick={() => onSelect(emoji)}
+            className="text-xl hover:bg-gray-800 rounded-lg p-1 transition-colors leading-none"
+            title={emoji}
+          >
+            {emoji}
+          </button>
+        ))}
+        {filteredEmojis.length === 0 && (
+          <p className="col-span-8 text-xs text-gray-600 text-center py-4">見つかりません</p>
+        )}
+      </div>
+
+      <div className="px-3 py-2 border-t border-gray-800 text-right">
+        <button onClick={onClose} className="text-xs text-gray-500 hover:text-gray-300">閉じる</button>
+      </div>
+    </div>
   )
 }
 
@@ -444,7 +547,12 @@ function TemplateModal({ template, folderId, folders, onClose }) {
   }
   const [treeContents, setTreeContents] = useState(parseContents)
   const [loading, setLoading] = useState(false)
+  const [showEmojiFor, setShowEmojiFor] = useState(null) // index of textarea showing picker
   const isEdit = !!template
+
+  const insertEmoji = (emoji, idx) => {
+    updateTree(idx, treeContents[idx] + emoji)
+  }
 
   const addTree = () => { if (treeContents.length >= 5) { toast.error('最大5件まで'); return }; setTreeContents(p => [...p, '']) }
   const removeTree = (i) => { if (treeContents.length <= 1) return; setTreeContents(p => p.filter((_, idx) => idx !== i)) }
@@ -484,9 +592,25 @@ function TemplateModal({ template, folderId, folders, onClose }) {
                 <span className="text-xs text-gray-500 font-medium">{i === 0 ? '1投稿目（メイン）' : `${i + 1}投稿目（ツリー）`}</span>
                 {i > 0 && <button type="button" onClick={() => removeTree(i)} className="text-gray-600 hover:text-red-400"><X size={13} /></button>}
               </div>
-              <textarea className="input resize-none font-mono text-xs" rows={i === 0 ? 5 : 3} required={i === 0}
-                placeholder={i === 0 ? '1投稿目の内容...' : `${i + 1}投稿目の内容（ツリー）...`}
-                value={content} maxLength={500} onChange={e => updateTree(i, e.target.value)} />
+              <div className="relative">
+                <textarea className="input resize-none font-mono text-xs pr-10" rows={i === 0 ? 5 : 3} required={i === 0}
+                  placeholder={i === 0 ? '1投稿目の内容...' : `${i + 1}投稿目の内容（ツリー）...`}
+                  value={content} maxLength={500} onChange={e => updateTree(i, e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiFor(showEmojiFor === i ? null : i)}
+                  className="absolute top-2 right-2 text-gray-500 hover:text-yellow-400 transition-colors"
+                  title="絵文字を挿入"
+                >
+                  <Smile size={16} />
+                </button>
+                {showEmojiFor === i && (
+                  <EmojiPicker
+                    onSelect={emoji => { insertEmoji(emoji, i); setShowEmojiFor(null) }}
+                    onClose={() => setShowEmojiFor(null)}
+                  />
+                )}
+              </div>
               <p className="text-xs text-gray-600 text-right mt-0.5">{content.length}/500</p>
             </div>
           ))}

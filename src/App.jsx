@@ -9,6 +9,7 @@ import TemplatesPage from './components/pages/TemplatesPage'
 import SchedulesPage from './components/pages/SchedulesPage'
 import ProxiesPage from './components/pages/ProxiesPage'
 import PostLogsPage from './components/pages/PostLogsPage'
+import UrlsPage from './components/pages/UrlsPage'
 
 function PrivateRoute({ children }) {
   const token = useAuthStore(s => s.token)
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="schedules" element={<SchedulesPage />} />
           <Route path="proxies" element={<ProxiesPage />} />
           <Route path="logs" element={<PostLogsPage />} />
+          <Route path="urls" element={<UrlsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

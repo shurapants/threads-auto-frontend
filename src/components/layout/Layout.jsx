@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, FileText, Calendar,
-  Globe, ScrollText, LogOut, Zap, X, Menu
+  Globe, ScrollText, LogOut, Zap, X, Menu, Link
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -12,6 +12,7 @@ const nav = [
   { to: '/templates', icon: FileText,         label: 'テンプレート' },
   { to: '/schedules', icon: Calendar,         label: 'スケジュール' },
   { to: '/proxies',   icon: Globe,            label: 'プロキシ' },
+  { to: '/urls',      icon: Link,             label: 'URL管理' },
   { to: '/logs',      icon: ScrollText,       label: '投稿ログ' },
 ]
 

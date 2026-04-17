@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown, Smile } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, FolderPlus, X, GitBranch, FolderInput, Check, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown, Smile, Link } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import Modal from '../ui/Modal'
@@ -317,6 +317,45 @@ function EmojiPicker({ onSelect, onClose }) {
   )
 }
 
+// ── URLピッカーコンポーネント ──────────────────────────────────
+function UrlPicker({ onSelect, onClose }) {
+  const { data: urls = [] } = useQuery({
+    queryKey: ['urls'],
+    queryFn: () => api.get('/urls')
+  })
+
+  return (
+    <div className="absolute z-50 right-0 top-full mt-1 w-72 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-gray-800">
+        <p className="text-xs font-medium text-gray-400">登録済みURL</p>
+      </div>
+      <div className="max-h-56 overflow-y-auto">
+        {urls.length === 0 ? (
+          <div className="px-4 py-6 text-center">
+            <p className="text-xs text-gray-600">URLが未登録です</p>
+            <p className="text-xs text-gray-700 mt-1">「URL管理」ページから登録してください</p>
+          </div>
+        ) : (
+          urls.map(u => (
+            <button
+              key={u.id}
+              onClick={() => onSelect(u.url)}
+              className="w-full flex flex-col items-start px-3 py-2.5 hover:bg-gray-800 transition-colors text-left border-b border-gray-800/50 last:border-0"
+            >
+              <span className="text-sm font-medium text-gray-200">{u.label}</span>
+              <span className="text-xs text-brand-400 font-mono truncate w-full">{u.url}</span>
+              {u.description && <span className="text-xs text-gray-600">{u.description}</span>}
+            </button>
+          ))
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-gray-800 text-right">
+        <button onClick={onClose} className="text-xs text-gray-500 hover:text-gray-300">閉じる</button>
+      </div>
+    </div>
+  )
+}
+
 // ── フォルダ作成・編集モーダル ──────────────────────────────────
 function FolderModal({ folder, onClose }) {
   const qc = useQueryClient()
@@ -548,10 +587,15 @@ function TemplateModal({ template, folderId, folders, onClose }) {
   const [treeContents, setTreeContents] = useState(parseContents)
   const [loading, setLoading] = useState(false)
   const [showEmojiFor, setShowEmojiFor] = useState(null) // index of textarea showing picker
+  const [showUrlFor, setShowUrlFor] = useState(null) // index of textarea showing URL picker
   const isEdit = !!template
 
   const insertEmoji = (emoji, idx) => {
     updateTree(idx, treeContents[idx] + emoji)
+  }
+
+  const insertUrl = (url, idx) => {
+    updateTree(idx, treeContents[idx] + url)
   }
 
   const addTree = () => { if (treeContents.length >= 5) { toast.error('最大5件まで'); return }; setTreeContents(p => [...p, '']) }
@@ -593,21 +637,37 @@ function TemplateModal({ template, folderId, folders, onClose }) {
                 {i > 0 && <button type="button" onClick={() => removeTree(i)} className="text-gray-600 hover:text-red-400"><X size={13} /></button>}
               </div>
               <div className="relative">
-                <textarea className="input resize-none font-mono text-xs pr-10" rows={i === 0 ? 5 : 3} required={i === 0}
+                <textarea className="input resize-none font-mono text-xs pr-16" rows={i === 0 ? 5 : 3} required={i === 0}
                   placeholder={i === 0 ? '1投稿目の内容...' : `${i + 1}投稿目の内容（ツリー）...`}
                   value={content} maxLength={500} onChange={e => updateTree(i, e.target.value)} />
-                <button
-                  type="button"
-                  onClick={() => setShowEmojiFor(showEmojiFor === i ? null : i)}
-                  className="absolute top-2 right-2 text-gray-500 hover:text-yellow-400 transition-colors"
-                  title="絵文字を挿入"
-                >
-                  <Smile size={16} />
-                </button>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setShowUrlFor(showUrlFor === i ? null : i); setShowEmojiFor(null) }}
+                    className="text-gray-500 hover:text-brand-400 transition-colors"
+                    title="URLを挿入"
+                  >
+                    <Link size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowEmojiFor(showEmojiFor === i ? null : i); setShowUrlFor(null) }}
+                    className="text-gray-500 hover:text-yellow-400 transition-colors"
+                    title="絵文字を挿入"
+                  >
+                    <Smile size={15} />
+                  </button>
+                </div>
                 {showEmojiFor === i && (
                   <EmojiPicker
                     onSelect={emoji => { insertEmoji(emoji, i); setShowEmojiFor(null) }}
                     onClose={() => setShowEmojiFor(null)}
+                  />
+                )}
+                {showUrlFor === i && (
+                  <UrlPicker
+                    onSelect={url => { insertUrl(url, i); setShowUrlFor(null) }}
+                    onClose={() => setShowUrlFor(null)}
                   />
                 )}
               </div>

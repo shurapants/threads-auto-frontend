@@ -437,4 +437,182 @@ export default function AccountSettingsPage() {
                     <div className="space-y-2">
                       {weeklySlots[activeWeekday].map((slot, i) => (
                         <SlotRow key={i} slot={slot} folders={folders} templates={templates}
-                          onUpdate={updated => setWeeklySlots(p => ({ ...p, [activeWeekday]: p[activeWeekday].map((s, idx) => idx === i ? up
+                          onUpdate={updated => setWeeklySlots(p => ({ ...p, [activeWeekday]: p[activeWeekday].map((s, idx) => idx === i ? updated : s) }))}
+                          onRemove={() => setWeeklySlots(p => ({ ...p, [activeWeekday]: p[activeWeekday].filter((_, idx) => idx !== i) }))} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* カレンダー */}
+            {mode === 'calendar' && (
+              <div className="space-y-3">
+                <MiniCalendar markedDates={Object.keys(calendarSlots)} onSelectDate={handleSelectDate} />
+                {selectedDate && (
+                  <div className="bg-gray-800/50 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-gray-300">
+                          {format(new Date(selectedDate), 'M月d日(E)', { locale: ja })}の設定
+                        </p>
+                        {/* 選択日の開運情報 */}
+                        {(() => {
+                          const { isNew, isFull, isIchiryuman, holiday } = getDayInfo(selectedDate)
+                          const labels = []
+                          if (holiday) labels.push(`🎌 ${holiday}`)
+                          if (isNew) labels.push('🌑 新月')
+                          if (isFull) labels.push('🌕 満月')
+                          if (isIchiryuman) labels.push('🌾 一粒万倍日')
+                          return labels.length > 0 ? (
+                            <div className="flex gap-1.5 mt-1 flex-wrap">
+                              {labels.map(l => (
+                                <span key={l} className="text-xs bg-yellow-500/10 text-yellow-400 px-2 py-0.5 rounded-full">{l}</span>
+                              ))}
+                            </div>
+                          ) : null
+                        })()}
+                      </div>
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => setShowCalendarGrid(p => !p)} className="btn-secondary text-xs py-1">
+                          <Plus size={12} /> 時間を追加
+                        </button>
+                        {calendarSlots[selectedDate]?.length === 0 && (
+                          <button type="button"
+                            onClick={() => setCalendarSlots(p => { const n = { ...p }; delete n[selectedDate]; return n })}
+                            className="btn-ghost text-xs py-1 text-red-500">
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {showCalendarGrid && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">時間をクリックして追加</p>
+                        <TimeGrid onSelect={addCalendarSlot} />
+                      </div>
+                    )}
+                    {(calendarSlots[selectedDate] || []).length === 0 ? (
+                      <p className="text-xs text-gray-600 text-center py-2">時間が未設定です</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(calendarSlots[selectedDate] || []).map((slot, i) => (
+                          <SlotRow key={i} slot={slot} folders={folders} templates={templates}
+                            onUpdate={updated => setCalendarSlots(p => ({ ...p, [selectedDate]: p[selectedDate].map((s, idx) => idx === i ? updated : s) }))}
+                            onRemove={() => setCalendarSlots(p => ({ ...p, [selectedDate]: p[selectedDate].filter((_, idx) => idx !== i) }))} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {Object.keys(calendarSlots).length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500 font-medium">設定済みの日付</p>
+                    {Object.entries(calendarSlots).sort().map(([dateStr, slots]) => {
+                      const { isNew, isFull, isIchiryuman } = getDayInfo(dateStr)
+                      return (
+                        <button key={dateStr} type="button" onClick={() => setSelectedDate(dateStr)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all
+                            ${selectedDate === dateStr ? 'bg-brand-600/20 border border-brand-600/40' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                          <span className="text-gray-300 flex items-center gap-1.5">
+                            {format(new Date(dateStr), 'M月d日(E)', { locale: ja })}
+                            {isNew && <span>🌑</span>}
+                            {isFull && <span>🌕</span>}
+                            {isIchiryuman && <span>🌾</span>}
+                          </span>
+                          <span className="badge-blue">{slots.length}件</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button onClick={handleSave} disabled={saving || totalSlots === 0}
+              className="btn-primary w-full justify-center py-2.5">
+              <Save size={15} />
+              {saving ? '保存中...' : `スケジュールを保存（${totalSlots}件）`}
+            </button>
+          </div>
+        </div>
+
+        {/* 右: 登録済みスケジュール */}
+        <div className="space-y-3">
+          <h2 className="font-semibold text-gray-300 text-sm flex items-center gap-2">
+            <Calendar size={14} /> 登録済みスケジュール
+            <span className="badge-blue">{existingSchedules.length}件</span>
+          </h2>
+          {existingSchedules.length === 0 ? (
+            <div className="card p-6 text-center"><p className="text-sm text-gray-600">スケジュールなし</p></div>
+          ) : (
+            <div className="space-y-2 max-h-[700px] overflow-y-auto">
+              {[...existingSchedules]
+                .sort((a, b) => {
+                  const aTime = (a.timeHour ?? 0) * 60 + (a.timeMinute ?? 0)
+                  const bTime = (b.timeHour ?? 0) * 60 + (b.timeMinute ?? 0)
+                  return aTime - bTime
+                })
+                .map(s => (
+                  <div key={s.id} className="card p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold font-mono text-brand-400">
+                            {s.scheduleType === 'weekly'
+                              ? `${String(s.timeHour).padStart(2,'0')}:${String(s.timeMinute).padStart(2,'0')}`
+                              : format(new Date(s.calendarDates?.[0] || Date.now()), 'M/d HH:mm')
+                            }
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {s.scheduleType === 'weekly'
+                              ? s.weekdays.map(d => WEEKDAY_LABELS[d]).join('・')
+                              : 'カレンダー'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => toggleSchedule(s)}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium transition-all
+                            ${s.isActive ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                          {s.isActive ? 'ON' : 'OFF'}
+                        </button>
+                        <button onClick={() => deleteSchedule(s.id)} className="btn-ghost p-1.5 text-red-500">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    <select
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 outline-none"
+                      value={s.folderId ? `folder:${s.folderId}` : s.templateId ? `template:${s.templateId}` : ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val.startsWith('folder:')) updateScheduleTemplate(s, val.replace('folder:', ''), '')
+                        else if (val.startsWith('template:')) updateScheduleTemplate(s, '', val.replace('template:', ''))
+                        else updateScheduleTemplate(s, '', '')
+                      }}
+                    >
+                      <option value="">テンプレート未設定</option>
+                      {folders.length > 0 && (
+                        <optgroup label="── フォルダ（ランダム）">
+                          {folders.map(f => <option key={f.id} value={`folder:${f.id}`}>📁 {f.name}</option>)}
+                        </optgroup>
+                      )}
+                      {templates.length > 0 && (
+                        <optgroup label="── テンプレート（固定）">
+                          {templates.map(t => <option key={t.id} value={`template:${t.id}`}>📄 {t.title}</option>)}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

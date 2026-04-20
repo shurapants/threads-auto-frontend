@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Power, Send, UserCircle, Settings,
@@ -13,22 +13,36 @@ import Modal from '../ui/Modal'
 // ── トークン生成ツール ─────────────────────────────────────────
 function TokenGenerator({ onTokenReady }) {
   const [open, setOpen] = useState(false)
-  const [appId, setAppId] = useState(() => localStorage.getItem('threads_app_id') || '')
-  const [appSecret, setAppSecret] = useState(() => localStorage.getItem('threads_app_secret') || '')
+  const [appId, setAppId] = useState('')
+  const [appSecret, setAppSecret] = useState('')
   const [showSecret, setShowSecret] = useState(false)
   const [code, setCode] = useState('')
-  const [redirectUri, setRedirectUri] = useState(() => localStorage.getItem('threads_redirect_uri') || window.location.origin)
-  const [step, setStep] = useState(1) // 1: 設定, 2: コード入力, 3: 完了
+  const [redirectUri, setRedirectUri] = useState(window.location.origin)
+  const [step, setStep] = useState(1)
   const [longToken, setLongToken] = useState('')
   const [userId, setUserId] = useState('')
   const [loading, setLoading] = useState(false)
+  const [settingsSaved, setSettingsSaved] = useState(false)
 
-  const saveSettings = () => {
-    localStorage.setItem('threads_app_id', appId)
-    localStorage.setItem('threads_app_secret', appSecret)
-    localStorage.setItem('threads_redirect_uri', redirectUri)
-    toast.success('設定を保存しました')
-    setStep(2)
+  // DBから設定を読み込む
+  useEffect(() => {
+    api.get('/settings/app').then(data => {
+      if (data.appId) setAppId(data.appId)
+      if (data.appSecret) setAppSecret(data.appSecret)
+      if (data.redirectUri) setRedirectUri(data.redirectUri)
+      if (data.appId && data.appSecret) setSettingsSaved(true)
+    }).catch(() => {})
+  }, [])
+
+  const saveSettings = async () => {
+    try {
+      await api.put('/settings/app', { appId, appSecret, redirectUri })
+      toast.success('設定をサーバーに保存しました')
+      setSettingsSaved(true)
+      setStep(2)
+    } catch {
+      toast.error('設定の保存に失敗しました')
+    }
   }
 
   const authUrl = `https://www.threads.net/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish&response_type=code`
@@ -37,12 +51,10 @@ function TokenGenerator({ onTokenReady }) {
     if (!code.trim()) { toast.error('コードを入力してください'); return }
     if (!appId || !appSecret) { toast.error('アプリIDとシークレットを設定してください'); setStep(1); return }
 
-    // codeから#_を除去
     const cleanCode = code.trim().replace(/#.*$/, '').replace(/\s/g, '')
     setLoading(true)
 
     try {
-      // Step1: 短期トークン取得
       const shortRes = await fetch(
         `https://graph.threads.net/oauth/access_token`,
         {
@@ -65,7 +77,6 @@ function TokenGenerator({ onTokenReady }) {
       const shortToken = shortData.access_token
       const shortUserId = shortData.user_id ? String(shortData.user_id) : ''
 
-      // Step2: 長期トークンに変換
       const longRes = await fetch(
         `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_id=${appId}&client_secret=${appSecret}&access_token=${shortToken}`
       )
@@ -77,7 +88,6 @@ function TokenGenerator({ onTokenReady }) {
       const finalToken = longData.access_token
       setLongToken(finalToken)
 
-      // Step3: user_idを取得（短期トークンのuser_idを使用、なければprofile APIで取得）
       let finalUserId = shortUserId
       if (!finalUserId) {
         try {
@@ -127,7 +137,10 @@ function TokenGenerator({ onTokenReady }) {
             <p className="text-xs text-gray-500">コードを貼るだけで長期トークンに自動変換</p>
           </div>
         </div>
-        {open ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+        <div className="flex items-center gap-2">
+          {settingsSaved && <span className="text-xs text-green-400">✓ 設定済み</span>}
+          {open ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+        </div>
       </button>
 
       {open && (
@@ -151,6 +164,9 @@ function TokenGenerator({ onTokenReady }) {
           {/* Step 1: App settings */}
           {step === 1 && (
             <div className="space-y-3">
+              <div className="bg-blue-900/20 border border-blue-800/30 rounded-xl px-4 py-2">
+                <p className="text-xs text-blue-300">🔐 アプリIDとシークレットはサーバーに暗号化保存されます。シークレットブラウザでも自動的に読み込まれます。</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">アプリID</label>
@@ -178,12 +194,16 @@ function TokenGenerator({ onTokenReady }) {
                 <label className="label">リダイレクトURI（Metaのアプリ設定と一致させる）</label>
                 <input className="input font-mono text-xs" value={redirectUri} onChange={e => setRedirectUri(e.target.value)} />
               </div>
-              <div className="flex justify-end">
-                <button onClick={saveSettings} disabled={!appId || !appSecret} className="btn-primary">
+              <div className="flex justify-between items-center">
+                {settingsSaved && (
+                  <button onClick={() => setStep(2)} className="btn-ghost text-xs text-green-400">
+                    設定済み → コード入力へスキップ
+                  </button>
+                )}
+                <button onClick={saveSettings} disabled={!appId || !appSecret} className="btn-primary ml-auto">
                   保存して次へ →
                 </button>
               </div>
-              {appId && <p className="text-xs text-green-500">✓ 設定済み（ブラウザに保存されています）</p>}
             </div>
           )}
 
@@ -209,8 +229,7 @@ function TokenGenerator({ onTokenReady }) {
 
               <div className="flex justify-between">
                 <button onClick={() => setStep(1)} className="btn-ghost text-xs">← 設定に戻る</button>
-                <button onClick={convertToken} disabled={loading || !code}
-                  className="btn-primary">
+                <button onClick={convertToken} disabled={loading || !code} className="btn-primary">
                   {loading ? (
                     <><Loader size={14} className="animate-spin" /> 変換中...</>
                   ) : (
@@ -304,7 +323,6 @@ function AddAccountModal({ onClose, proxies, initialToken = '', initialUserId = 
           <label className="label">Threads User ID <span className="text-red-400">*</span></label>
           <input className="input" placeholder="数字のユーザーID（user_idの値）" required
             value={form.threadsUserId} onChange={e => setForm(p => ({ ...p, threadsUserId: e.target.value }))} />
-          <p className="text-xs text-gray-600 mt-1">短期トークン取得時のレスポンスに含まれる <code className="bg-gray-800 px-1 rounded">user_id</code> の値</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -330,7 +348,7 @@ function AddAccountModal({ onClose, proxies, initialToken = '', initialUserId = 
 }
 
 function TestPostModal({ account, onClose }) {
-  const [mode, setMode] = useState('manual') // 'manual' | 'template'
+  const [mode, setMode] = useState('manual')
   const [content, setContent] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
@@ -374,12 +392,8 @@ function TestPostModal({ account, onClose }) {
   return (
     <Modal title={`テスト投稿 — @${account.username}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        {/* モード切替 */}
         <div className="flex rounded-xl bg-gray-800 p-1 gap-1">
-          {[
-            { v: 'manual', label: '手打ち' },
-            { v: 'template', label: 'テンプレートから選択' },
-          ].map(({ v, label }) => (
+          {[{ v: 'manual', label: '手打ち' }, { v: 'template', label: 'テンプレートから選択' }].map(({ v, label }) => (
             <button key={v} type="button" onClick={() => setMode(v)}
               className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all
                 ${mode === v ? 'bg-gray-700 text-gray-100 shadow' : 'text-gray-400 hover:text-gray-200'}`}>
@@ -388,7 +402,6 @@ function TestPostModal({ account, onClose }) {
           ))}
         </div>
 
-        {/* 手打ちモード */}
         {mode === 'manual' && (
           <div>
             <label className="label">投稿内容</label>
@@ -399,7 +412,6 @@ function TestPostModal({ account, onClose }) {
           </div>
         )}
 
-        {/* テンプレートモード */}
         {mode === 'template' && (
           <div className="space-y-3">
             <div>
@@ -407,21 +419,17 @@ function TestPostModal({ account, onClose }) {
               <select className="input" value={selectedFolderId}
                 onChange={e => { setSelectedFolderId(e.target.value); setSelectedTemplateId('') }}>
                 <option value="">すべてのテンプレート</option>
-                {folders.map(f => <option key={f.id} value={f.id}>{f.name}（{f._count?.templates}件）</option>)}
+                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
             </div>
             <div>
               <label className="label">テンプレート</label>
               <select className="input" value={selectedTemplateId}
                 onChange={e => setSelectedTemplateId(e.target.value)}>
-                <option value="">
-                  {selectedFolderId ? 'フォルダからランダムに選択' : 'テンプレートを選択'}
-                </option>
+                <option value="">{selectedFolderId ? 'フォルダからランダムに選択' : 'テンプレートを選択'}</option>
                 {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
               </select>
             </div>
-
-            {/* プレビュー */}
             {(selectedTemplate || selectedFolderId) && (
               <div className="bg-gray-800 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-1.5">
@@ -531,7 +539,6 @@ export default function AccountsPage() {
         </div>
       </div>
 
-      {/* Token generator */}
       <TokenGenerator onTokenReady={handleTokenReady} />
 
       {isLoading ? (
@@ -557,25 +564,17 @@ export default function AccountsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <a
-                      href={`https://www.threads.net/@${acc.username}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <a href={`https://www.threads.net/@${acc.username}`} target="_blank" rel="noopener noreferrer"
                       className="font-medium text-gray-200 hover:text-brand-400 transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
+                      onClick={e => e.stopPropagation()}>
                       {acc.displayName}
                     </a>
                     <span className={acc.isActive ? 'badge-green' : 'badge-gray'}>{acc.isActive ? 'アクティブ' : '停止中'}</span>
                     <StatusBadge status={statuses[acc.id]} />
                   </div>
-                  <a
-                    href={`https://www.threads.net/@${acc.username}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <a href={`https://www.threads.net/@${acc.username}`} target="_blank" rel="noopener noreferrer"
                     className="text-sm text-gray-500 hover:text-brand-400 transition-colors"
-                    onClick={e => e.stopPropagation()}
-                  >
+                    onClick={e => e.stopPropagation()}>
                     @{acc.username}
                   </a>
                 </div>
